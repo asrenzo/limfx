@@ -1,4 +1,5 @@
-# -*- coding: UTF-8 -*-
+# Encoding: utf-8
+
 #=-
 # Copyright (c) 2016, Laurent Rahuel
 # All rights reserved.
@@ -28,27 +29,43 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #=-
-from setuptools import setup, find_packages
-import sys, os
 
-VERSION = open('VERSION').read()
+"""Helper to validate a configuration"""
 
-setup(name='limfx',
-      version=VERSION,
-      description="",
-      long_description="",
-      classifiers=[],
-      keywords='',
-      author='Laurent Rahuel',
-      author_email='laurent.rahuel@gmail.com',
-      url='',
-      license='BSD',
-      packages=find_packages(exclude=['ez_setup', 'examples', 'tests']),
-      include_package_data=True,
-      zip_safe=False,
-      install_requires=('gevent', 'configobj', 'schematics', 'dependency_injector', 'requests', 'paho-mqtt'),
-      entry_points='''
-        [console_scripts]
-        limfx-admin = limfx.app:run
-      ''',
-      )
+import configobj
+from validate import Validator
+
+
+def _validate(filename, config):
+    """Validate a ``ConfigObj`` object
+
+    In:
+      -  ``filename`` -- the path to the configuration file
+      - ``config`` -- the ``ConfigObj`` object, created from the configuration file
+
+    Return:
+      - yield the error messages
+    """
+    errors = configobj.flatten_errors(config, config.validate(Validator(), preserve_errors=True))
+
+    for sections, name, error in errors:
+        yield 'file "%s", section "[%s]", parameter "%s": %s' % (filename, ' / '.join(sections), name, error)
+
+
+def validate(filename, config, error):
+    """Validate a ``ConfigObj`` object
+
+    In:
+      -  ``filename`` -- the path to the configuration file
+      - ``config`` -- the ``ConfigObj`` object, created from the configuration file
+      - ``error`` -- the function to call in case of configuration errors
+
+    Return:
+      - is the configuration valid ?
+    """
+    errors = list(_validate(filename, config))
+    if errors:
+        error('\n'.join(errors))
+        return False
+
+    return True

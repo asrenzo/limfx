@@ -1,3 +1,4 @@
 
-      # -*- Entry points: -*-
+        [console_scripts]
+        limfx-admin = limfx.app:run
       
