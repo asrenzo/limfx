@@ -47,25 +47,34 @@ import pkg_resources
 
 from . import config
 
+from services.common.configuration import mqtt_spec, mqtt_configuration
+
 
 class Manager(object):
-    spec = {
-        'mqtt_host': 'string(default="127.0.0.1")',
-        'mqtt_port': 'integer(default=1883)',
-        'mqtt_user': 'string(default="")',
-        'mqtt_pwd': 'string(default="")',
-    }
+    def __init__(self, mqtt_conf):
+        self.mqtt_conf = mqtt_configuration(**mqtt_conf)
 
-    def __init__(self, mqtt_host='127.0.0.1', mqtt_port=1883, mqtt_user='', mqtt_pwd=''):
-        self.mqtt_host = mqtt_host
-        self.mqtt_port = mqtt_port
-        self.mqtt_user = mqtt_user
-        self.mqtt_pwd = mqtt_pwd
-
-    def start(self):
-        msg = 'Manager app launched (mqtt_host : %s, mqtt_port : %s)' %(self.mqtt_host, self.mqtt_port)
+    def _run(self):
+        msg = "This is start point"
+        #msg = 'Manager app launched (mqtt_host : %s, mqtt_port : %s)' %(self.mqtt_host, self.mqtt_port)
         print msg
         logging.getLogger('limfx.manager').info(msg)
+
+    def run(self):
+        me = gevent.spawn(self._run)
+        me.join()
+
+    # The callback for when the client receives a CONNACK response from the server.
+    def on_connect(self, client, userdata, flags, rc):
+        print("Connected with result code "+str(rc))
+
+        # Subscribing in on_connect() means that if we lose the connection and
+        # reconnect then subscriptions will be renewed.
+        client.subscribe("$SYS/#")
+
+    # The callback for when a PUBLISH message is received from the server.
+    def on_message(self, client, userdata, msg):
+        print(msg.topic+" "+str(msg.payload))
 
 
 class App(object):
@@ -76,7 +85,7 @@ class App(object):
             '': 'boolean(default=True)',
         },
 
-        'manager': Manager.spec,
+        'mqtt': mqtt_spec,
 
         'logging': {
             'formatters': {'keys': 'string(default="")'},
@@ -103,7 +112,11 @@ class App(object):
 
         logging.config.fileConfig(StringIO.StringIO(log_conf))
 
-        self.manager = Manager(**conf['manager'])
+        self.manager = Manager(mqtt_conf=conf['mqtt'])
+
+
+    def run(self):
+        self.manager.run()
 
 
 def run(*args, **kw):
@@ -112,16 +125,14 @@ def run(*args, **kw):
         Usage: %s <command>
 
         with <command>:
-          - start           : launch app
+          - run           : launch app
         ''' % os.path.basename(sys.argv[0]))
         return 2
 
     command = sys.argv.pop(1)
     parser = optparse.OptionParser('%%prog start <config_file>')
 
-    if command == 'start':
-        pass
-    else:
+    if command != 'run':
         parser.error('command not found')
 
     options, args = parser.parse_args()
@@ -138,6 +149,5 @@ def run(*args, **kw):
 
     app = App(config_file, parser.error, conf)
 
-    if command == 'start':
-        manager = gevent.spawn(app.manager.start)
-        manager.join()
+    if command == 'run':
+        app.run()
